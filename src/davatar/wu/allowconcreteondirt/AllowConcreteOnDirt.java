@@ -61,7 +61,12 @@ public class AllowConcreteOnDirt implements WurmServerMod, Configurable, PreInit
     }
     @Override
     public void configure(Properties properties) {
-    	overrideMaxSlope = Integer.parseInt(properties.getProperty("maxSlope", "0"), 10);
+    	String maxSlopeString = properties.getProperty("maxSlope", "0");
+    	if(maxSlopeString.contains("default")) {
+        	overrideMaxSlope = 0;
+    	} else {
+        	overrideMaxSlope = Integer.parseInt(properties.getProperty("maxSlope", "0"), 10);
+    	}
     	if(overrideMaxSlope > 0) {
             logInfo("overrideMaxSlope: " + overrideMaxSlope);
             logInfo("Max slope is overridden and set to: " + overrideMaxSlope + ". Default max slope would be: " + defaultMaxSlopePvP + " on PvP and " + defaultMaxSlopeNonePvP);
