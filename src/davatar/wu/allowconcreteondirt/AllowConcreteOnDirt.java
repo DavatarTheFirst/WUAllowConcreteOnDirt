@@ -2,12 +2,14 @@ package davatar.wu.allowconcreteondirt;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
+import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.gotti.wurmunlimited.modloader.classhooks.HookException;
 import org.gotti.wurmunlimited.modloader.classhooks.HookManager;
 import org.gotti.wurmunlimited.modloader.classhooks.InvocationHandlerFactory;
+import org.gotti.wurmunlimited.modloader.interfaces.Configurable;
 import org.gotti.wurmunlimited.modloader.interfaces.PreInitable;
 import org.gotti.wurmunlimited.modloader.interfaces.WurmServerMod;
 
@@ -33,8 +35,15 @@ import javassist.CtClass;
 import javassist.CtPrimitiveType;
 import javassist.bytecode.Descriptor;
 
-public class AllowConcreteOnDirt implements WurmServerMod, PreInitable {
-    private static Logger logger = Logger.getLogger("ConcreteOnDirt");
+public class AllowConcreteOnDirt implements WurmServerMod, Configurable, PreInitable {
+    private static int overrideMaxSlope = 0;
+    private static int defaultMaxSlopePvP = 25;
+    private static int defaultMaxSlopeNonePvP = 40;
+    // The original server code has a maximum of 300 set
+    private static int serverSlopeLimit = 300;
+    private static boolean isSlopeLogEnabled = false;
+    
+    private static Logger logger = Logger.getLogger("AllowConcreteOnDirt");
     
     public static void logException(String msg, Throwable e) {
         if (logger != null) { logger.log(Level.SEVERE, msg, e); }
@@ -48,7 +57,22 @@ public class AllowConcreteOnDirt implements WurmServerMod, PreInitable {
     }
 
     public String getVersion() {
-    	return "0.1";
+    	return "0.2";
+    }
+    @Override
+    public void configure(Properties properties) {
+    	overrideMaxSlope = Integer.parseInt(properties.getProperty("maxSlope", "0"), 10);
+    	if(overrideMaxSlope > 0) {
+            logInfo("overrideMaxSlope: " + overrideMaxSlope);
+            logInfo("Max slope is overridden and set to: " + overrideMaxSlope + ". Default max slope would be: " + defaultMaxSlopePvP + " on PvP and " + defaultMaxSlopeNonePvP);
+    	} else if(overrideMaxSlope < 0) {
+            logInfo("Max slope is overridden and set to server slope limit of: " + serverSlopeLimit);
+    	}
+        
+        isSlopeLogEnabled = Boolean.parseBoolean(properties.getProperty("isSlopeLogEnabled", "false"));
+        if(isSlopeLogEnabled) {
+            logInfo("Slope log is enabled.");
+        }
     }
     
 	@Override
@@ -179,19 +203,31 @@ public class AllowConcreteOnDirt implements WurmServerMod, PreInitable {
                     }
                 }
                 final int slopeDown = Terraforming.getMaxSurfaceDownSlope(tilex, tiley);
-                final int maxSlope = Servers.localServer.PVPSERVER ? -25 : -40;
+                int maxSlope = Servers.localServer.PVPSERVER ? -defaultMaxSlopePvP : -defaultMaxSlopeNonePvP;
+                if(overrideMaxSlope != 0) {
+                	maxSlope = overrideMaxSlope > 0 ? -overrideMaxSlope : -serverSlopeLimit;
+                }
                 if (performer.getPower() > 4 && source.getTemplateId() == 176) {
-                    if (slopeDown < -300) {
-                        performer.getCommunicator().sendNormalServerMessage("Maximum slope would be exceeded.");
+                    if (slopeDown < -serverSlopeLimit) {
+                    	if(isSlopeLogEnabled) {
+                            performer.getCommunicator().sendNormalServerMessage("Maximum slope would be exceeded.");
+                    	} else {
+                            performer.getCommunicator().sendNormalServerMessage("Maximum slope of " + serverSlopeLimit + " would be exceeded.");
+                    	}
                         return true;
                     }
-                }
-                else if (slopeDown < maxSlope) {
+                } else if (slopeDown < maxSlope) {
                     if (performer.getPower() == 4 && source.getTemplateId() == 176) {
-                        performer.getCommunicator().sendNormalServerMessage("Maximum slope would be exceeded.");
-                    }
-                    else {
+                    	if(isSlopeLogEnabled) {
+                            performer.getCommunicator().sendNormalServerMessage("Maximum slope would be exceeded.");
+                    	} else {
+                            performer.getCommunicator().sendNormalServerMessage("Maximum slope of " + serverSlopeLimit + " would be exceeded.");
+                    	}
+                    } else {
                         performer.getCommunicator().sendNormalServerMessage("The " + source.getName() + " would only flow away.");
+                        if(isSlopeLogEnabled) {
+                            performer.getCommunicator().sendNormalServerMessage("Max slope is set to: " + -maxSlope);
+                        }
                     }
                     return true;
                 }
